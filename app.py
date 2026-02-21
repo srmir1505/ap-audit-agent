@@ -34,32 +34,27 @@ with col2:
 if po_file and inv_file:
     if st.button("🚀 Run Enterprise Audit"):
         with st.spinner('Performing Forensic Comparison...'):
-            po_text = "".join([p.extract_text() for p in PdfReader(po_file).pages])
-            inv_text = "".join([p.extract_text() for p in PdfReader(inv_file).pages])
             
-            # UPGRADED SYSTEM PROMPT: Now handles Multi-Currency & Risk Scoring
-            prompt = f"""
-            You are a Senior Forensic Accountant. Compare the PO and Invoice.
-            
-            TASKS:
-           if po_file and inv_file:
-    if st.button("🚀 Run Enterprise Audit"):
-        with st.spinner('Performing Forensic Comparison...'):
             # 1. CLEAN TEXT EXTRACTION
             def get_clean_text(file):
                 text = "".join([p.extract_text() for p in PdfReader(file).pages])
-                return text.replace('{', '[').replace('}', ']').strip() # Remove JSON-breaking chars
+                clean_text = text.replace('{', '[').replace('}', ']').strip()
+                return clean_text
 
             po_text = get_clean_text(po_file)
             inv_text = get_clean_text(inv_file)
             
-            # 2. BULLETPROOF PROMPT
-            # We explicitly tell it to return ONLY JSON and nothing else
+            # 2. BULLETPROOF PROMPT (Multi-Currency & Risk)
             prompt = f"""
-            System: Senior Forensic Accountant
-            Goal: Compare PO and Invoice.
+            You are a Senior Forensic Accountant. Compare the PO and Invoice.
             
-            Rule: Flag 'human_review': true if variance > {tolerance}%.
+            TASKS:
+            1. Detect CURRENCY for both (e.g., USD, CAD). If different, convert Invoice to PO currency.
+            2. Compare Totals. Calculate variance %.
+            3. Assign RISK LEVEL: 
+               - 'LOW (Green)' if variance < {tolerance}%
+               - 'MEDIUM (Yellow)' if variance between {tolerance}% and 5%
+               - 'HIGH (Red)' if variance > 5% or unauthorized items found.
             
             PURCHASE ORDER DATA:
             {po_text}
@@ -68,49 +63,4 @@ if po_file and inv_file:
             {inv_text}
             
             Output ONLY a JSON object with these keys: 
-            vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, human_review, review_reason.
-            """
-            
-            # 3. CALL MODEL
-            try:
-                response = model.generate_content(prompt)
-                
-                # Check if the response actually has text
-                if not response.text:
-                    st.error("AI returned an empty response. Try simplifying the PDF.")
-                    st.stop()
-                    "Vendor": res.get("vendor"),
-                    "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
-                    "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
-                    "Variance": f"{res.get('variance_pct')}%",
-                    "Risk": res.get("risk_level"),
-                    "Status": "🚨 REVIEW" if res.get("human_review") else "✅ CLEAR"
-                })
-                
-                st.success("Audit Complete!")
-                st.json(res)
-            except Exception as e:
-                st.error(f"Audit Error: {e}")
-
-# 5. THE AUDIT LOG & EXPORT
-if st.session_state.history:
-    st.divider()
-    st.subheader("📊 Multi-Doc Audit Log")
-    df = pd.DataFrame(st.session_state.history)
-    
-    # Apply Visual Color Scoring to the table
-    def color_risk(val):
-        color = 'red' if 'HIGH' in val else 'orange' if 'MEDIUM' in val else 'green'
-        return f'color: {color}; font-weight: bold'
-    
-    st.table(df.style.applymap(color_risk, subset=['Risk']))
-    
-    # 6. EXPORT BUTTON
-    csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Audit Trail (CSV)",
-        data=csv,
-        file_name="ap_audit_trail_export.csv",
-        mime="text/csv",
-    )
-
+            vendor, inv
