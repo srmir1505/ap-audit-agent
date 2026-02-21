@@ -42,27 +42,43 @@ if po_file and inv_file:
             You are a Senior Forensic Accountant. Compare the PO and Invoice.
             
             TASKS:
-            1. Detect CURRENCY for both (e.g., USD, CAD, EUR). If different, convert Invoice to PO currency.
-            2. Compare Totals. Calculate variance %.
-            3. Assign RISK LEVEL: 
-               - 'LOW (Green)' if variance < {tolerance}%
-               - 'MEDIUM (Yellow)' if variance between {tolerance}% and 5%
-               - 'HIGH (Red)' if variance > 5% or unauthorized items found.
+           if po_file and inv_file:
+    if st.button("🚀 Run Enterprise Audit"):
+        with st.spinner('Performing Forensic Comparison...'):
+            # 1. CLEAN TEXT EXTRACTION
+            def get_clean_text(file):
+                text = "".join([p.extract_text() for p in PdfReader(file).pages])
+                return text.replace('{', '[').replace('}', ']').strip() # Remove JSON-breaking chars
+
+            po_text = get_clean_text(po_file)
+            inv_text = get_clean_text(inv_file)
             
-            PO: {po_text}
-            INVOICE: {inv_text}
+            # 2. BULLETPROOF PROMPT
+            # We explicitly tell it to return ONLY JSON and nothing else
+            prompt = f"""
+            System: Senior Forensic Accountant
+            Goal: Compare PO and Invoice.
             
-            Return JSON: vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, human_review (bool), review_reason.
+            Rule: Flag 'human_review': true if variance > {tolerance}%.
+            
+            PURCHASE ORDER DATA:
+            {po_text}
+            
+            INVOICE DATA:
+            {inv_text}
+            
+            Output ONLY a JSON object with these keys: 
+            vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, human_review, review_reason.
             """
             
-            response = model.generate_content(prompt)
-            
+            # 3. CALL MODEL
             try:
-                raw_json = response.text.replace('```json', '').replace('```', '').strip()
-                res = json.loads(raw_json)
+                response = model.generate_content(prompt)
                 
-                # Logic for the Audit Log
-                st.session_state.history.append({
+                # Check if the response actually has text
+                if not response.text:
+                    st.error("AI returned an empty response. Try simplifying the PDF.")
+                    st.stop()
                     "Vendor": res.get("vendor"),
                     "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
                     "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
@@ -97,3 +113,4 @@ if st.session_state.history:
         file_name="ap_audit_trail_export.csv",
         mime="text/csv",
     )
+
