@@ -1,15 +1,22 @@
 import streamlit as st
 import google.generativeai as genai
-# ... (rest of your imports)
+from PyPDF2 import PdfReader
+import pandas as pd
+import json
 
-# 1. SECURE KEY LOADING
-# Instead of hard-coding your key, we pull it from the cloud 'secrets'
-# Change this:
-api_key = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=api_key)
 
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+
+st.set_page_config(page_title="AP Agent Dashboard", page_icon="🏦", layout="wide")
+st.title("🏦 Sahir's AP Specialist AI")
+
+if 'history' not in st.session_state:
+    st.session_state.history = []
+
+genai.configure(api_key="AIzaSyAm90SoKYJXY9-0CehsHLmIcUcVhcn7W2Q") # Replace with your ...7W2Q key
 model = genai.GenerativeModel('gemini-3-flash-preview')
-# ... (rest of your code remains the same)
 
 # --- SIDEBAR FOR SETTINGS ---
 with st.sidebar:
@@ -67,5 +74,4 @@ if po_file and inv_file:
 if st.session_state.history:
     st.divider()
     st.subheader("📊 Multi-Doc Audit Log")
-
     st.table(pd.DataFrame(st.session_state.history))
