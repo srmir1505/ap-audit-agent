@@ -101,4 +101,48 @@ with tab1:
                     "Vendor": res.get("vendor"),
                     "Invoice": f"{res.get('inv_amt')}",
                     "Variance": f"{res.get('variance_pct')}%",
-                    "Issue": res.get("issue_
+                    "Issue": res.get("issue_type"),
+                    "Risk": res.get("risk_level"),
+                    "RawData": res,
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                st.session_state.history.append(audit_entry)
+                
+                if res.get("risk_level") == "LOW":
+                    st.balloons()
+                    st.success("✅ 3-Way Match Successful.")
+                    
+                    voucher_text = f"VOUCHER APPROVED: {res.get('vendor')} | {res.get('inv_amt')} | Verified by Sahir Raza Mir, MPAc"
+                    st.download_button("📥 Download Voucher", voucher_text, file_name=f"voucher_{res.get('vendor')}.txt")
+                else:
+                    st.warning(f"⚠️ Audit Alert: {res.get('review_reason')}")
+                
+                show_details(res)
+
+with tab2:
+    if st.session_state.history:
+        st.markdown("### Master Audit Log")
+        st.info("💡 Pro Tip: Click a row to re-open the forensic breakdown.")
+        
+        df = pd.DataFrame(st.session_state.history)
+        
+        selection = st.dataframe(
+            df.drop(columns=['RawData']), 
+            use_container_width=True, 
+            hide_index=True,
+            on_select="rerun", 
+            selection_mode="single_row"
+        )
+        
+        if len(selection.selection.rows) > 0:
+            selected_idx = selection.selection.rows[0]
+            show_details(st.session_state.history[selected_idx]["RawData"])
+    else:
+        st.info("Upload 3 documents to begin.")
+
+with tab3:
+    st.markdown("### Vendor Risk Distribution")
+    if st.session_state.history:
+        df_viz = pd.DataFrame(st.session_state.history)
+        risk_counts = df_viz['Risk'].value_counts()
+        st.bar_chart(risk_counts)
