@@ -4,7 +4,8 @@ import google.generativeai as genai
 
 # 1. SECURE KEY LOADING
 # Instead of hard-coding your key, we pull it from the cloud 'secrets'
-api_key = st.secrets["AIzaSyAm90SoKYJXY9-0CehsHLmIcUcVhcn7W2Q"]
+# Change this:
+api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 
 model = genai.GenerativeModel('gemini-3-flash-preview')
@@ -66,4 +67,5 @@ if po_file and inv_file:
 if st.session_state.history:
     st.divider()
     st.subheader("📊 Multi-Doc Audit Log")
+
     st.table(pd.DataFrame(st.session_state.history))
