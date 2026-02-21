@@ -79,9 +79,7 @@ with tab1:
                 
                 prompt = f"""
                 Analyze these 3 documents as a Forensic Auditor.
-                1. Match Quantities (Receiving vs Invoice).
-                2. Match Prices (PO vs Invoice).
-                3. Calculate variance % between PO Total and Invoice Total.
+                Match Quantities, Prices, and calculate variance.
                 
                 RISK RULES:
                 - LOW: Perfect match within {final_policy}% tolerance.
@@ -123,26 +121,23 @@ with tab2:
     if st.session_state.history:
         st.markdown("### Master Audit Log")
         
-        # VERSION-PROOF SELECTION METHOD
+        # We replace the problematic selection logic with a standard selectbox
         df = pd.DataFrame(st.session_state.history)
-        
-        # Create a display name for each audit (Vendor + Time)
         audit_options = [f"{item['Vendor']} ({item['Timestamp']})" for item in st.session_state.history]
         
         col_select, col_btn = st.columns([3, 1])
         with col_select:
-            selected_audit_name = st.selectbox("Select an audit to review details:", options=audit_options, index=len(audit_options)-1)
+            selected_audit_name = st.selectbox("Select an audit to review:", options=audit_options, index=len(audit_options)-1)
         with col_btn:
             st.write("<br>", unsafe_allow_html=True)
-            if st.button("🔎 View Details", use_container_width=True):
-                # Find the index of the selected audit
+            if st.button("🔎 View Breakdown", use_container_width=True):
                 idx = audit_options.index(selected_audit_name)
                 show_details(st.session_state.history[idx]["RawData"])
 
         st.divider()
-        st.dataframe(df.drop(columns=['RawData']), use_container_width=True, hide_index=True)
+        st.dataframe(df.drop(columns=['RawData']), use_container_width=True)
     else:
-        st.info("Upload 3 documents in the Ingestion tab to begin.")
+        st.info("The Audit Trail will appear here after you process documents.")
 
 with tab3:
     st.markdown("### Vendor Risk Distribution")
