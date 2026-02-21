@@ -4,195 +4,128 @@ from PyPDF2 import PdfReader
 import pandas as pd
 import json
 
-# Set wide layout and custom title
-st.set_page_config(page_title="AP Agent Dashboard", page_icon="", layout="wide")
+# 1. PAGE CONFIG
+st.set_page_config(page_title="AP Agent Pro", page_icon="🔍", layout="wide")
 
-# --- 🎨 SAFE LIGHTWEIGHT CSS ---
-st.markdown("""
-    <style>
-    /* Hide default Streamlit footer */
-    footer {visibility: hidden;}
-    
-    /* Apply Apple system fonts */
-    html, body, [class*="css"] {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    
-    /* Clean, slightly rounded buttons */
-    .stButton>button {
-        border-radius: 8px;
-        font-weight: 500;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# 2. SESSION STATE
+if 'history' not in st.session_state:
+    st.session_state.history = []
 
-# --- 🔐 MODERN SECURE LOGIN GATEWAY ---
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"] 
-        else:
-            st.session_state["password_correct"] = False
+# 3. SECURE KEY LOADING
+api_key = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-3-flash-preview')
 
-    if "password_correct" not in st.session_state:
-        st.write("<br><br>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center;'>🔒 Secure System Access</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>Sahir's Enterprise AP Auditor</p>", unsafe_allow_html=True)
-        _, col, _ = st.columns([1, 1, 1])
-        with col:
-            st.text_input("Password", type="password", on_change=password_entered, key="password", placeholder="Enter your password...")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.write("<br><br>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center;'>🔒 Secure System Access</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>Sahir's Enterprise AP Auditor</p>", unsafe_allow_html=True)
-        _, col, _ = st.columns([1, 1, 1])
-        with col:
-            st.text_input("Password", type="password", on_change=password_entered, key="password", placeholder="Enter your password...")
-            st.error("Authentication Failed. Please try again.")
-        return False
-    return True
+# --- 🛠️ HELPER FUNCTIONS ---
+def get_clean_text(file):
+    text = "".join([p.extract_text() for p in PdfReader(file).pages])
+    return text.replace('{', '[').replace('}', ']').strip()
 
-# --- 🚀 MAIN APPLICATION ---
-if check_password():
-    
-    # 1. INITIALIZE SESSION STATE
-    if 'history' not in st.session_state:
-        st.session_state.history = []
-
-    # 2. SECURE KEY LOADING
-    api_key = st.secrets["GEMINI_API_KEY"]
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-3-flash-preview')
-
-    # --- HEADER & KPI DASHBOARD ---
-    st.markdown("<h1>Enterprise AP Auditor</h1>", unsafe_allow_html=True)
-    st.caption("Automated 3-Way Matching, Cross-Border Conversion & Forensic Risk Scoring")
-    st.write("") 
-
-    total_audits = len(st.session_state.history)
-    high_risk_count = sum(1 for item in st.session_state.history if "HIGH" in str(item.get("Risk", "")).upper())
-
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Documents Audited", total_audits)
-    col_m2.metric("High-Risk Flags", high_risk_count, delta_color="inverse")
-    col_m3.metric("System Status", "Securely Connected" if api_key else "Offline")
+# POP-UP (DIALOG) FOR DETAILED ANALYSIS
+@st.dialog("Forensic Breakdown")
+def show_details(res):
+    st.write(f"**Reasoning:** {res.get('review_reason')}")
     st.divider()
+    st.json(res)
+    if st.button("Close"):
+        st.rerun()
 
-    # --- SIDEBAR CONTROLS ---
-    with st.sidebar:
-        st.header("⚙️ Preferences")
-        tolerance = st.slider("Variance Tolerance (%)", 0.0, 5.0, 1.0)
-        st.info(f"Active Policy: Flag if > {tolerance}%")
-        st.divider()
-        st.write("Target: Fall 2026 Audit Ready")
-        st.write("")
-        if st.button("Log Out / End Session"):
-            st.session_state["password_correct"] = False
-            st.rerun()
+# --- 📱 MAIN UI ---
+st.title("🕵️ Forensic AP Auditor")
+st.caption("Advanced AI Analysis for High-Volume Accounts Payable")
 
-    # --- MAIN UPLOAD INTERFACE ---
-    col1, col2 = st.columns(2)
-    with col1:
-        po_file = st.file_uploader("1. Upload Purchase Order (PDF)", type="pdf")
-    with col2:
-        inv_file = st.file_uploader("2. Upload Invoice (PDF)", type="pdf")
+# --- SIDEBAR: SYSTEM STATS ---
+with st.sidebar:
+    st.header("📊 Session Intelligence")
+    if st.session_state.history:
+        df_stats = pd.DataFrame(st.session_state.history)
+        st.metric("Total Audits", len(df_stats))
+        high_risk = len(df_stats[df_stats['Risk'].str.contains("HIGH")])
+        st.metric("High Risk Flags", high_risk, delta=high_risk, delta_color="inverse")
+    else:
+        st.write("No audits run yet.")
+    
+    st.divider()
+    tolerance = st.slider("Variance Tolerance (%)", 0.0, 5.0, 1.0)
+    st.divider()
+    if st.button("Clear Session"):
+        st.session_state.history = []
+        st.rerun()
 
-    # --- EXECUTION LOGIC ---
+# --- TABS FOR BETTER SEPARATION ---
+tab1, tab2, tab3 = st.tabs(["📥 Ingestion", "📋 Audit Trail", "📈 Insights"])
+
+with tab1:
+    st.markdown("### Step 1: Document Upload")
+    c1, c2 = st.columns(2)
+    with c1:
+        po_file = st.file_uploader("Authorized Purchase Order", type="pdf")
+    with c2:
+        inv_file = st.file_uploader("Incoming Vendor Invoice", type="pdf")
+    
     if po_file and inv_file:
-        st.write("")
-        _, btn_col, _ = st.columns([1, 2, 1])
-        with btn_col:
-            run_audit = st.button("🚀 Run Forensic Audit", use_container_width=True)
-
-        if run_audit:
-            with st.spinner('Analyzing documents & calculating currency variances...'):
-                
-                def get_clean_text(file):
-                    text = "".join([p.extract_text() for p in PdfReader(file).pages])
-                    return text.replace('{', '[').replace('}', ']').strip()
-
+        st.success("Documents Loaded Successfully.")
+        if st.button("🚀 Execute Forensic Audit", use_container_width=True):
+            with st.spinner('AI Agent is scanning for discrepancies...'):
                 po_text = get_clean_text(po_file)
                 inv_text = get_clean_text(inv_file)
                 
                 prompt = f"""
-                You are a Senior Forensic Accountant. Compare the PO and Invoice.
+                Analyze these documents as a Forensic Accountant.
+                1. Detect Currency & Convert to PO Currency.
+                2. Check Variance. Tolerance is {tolerance}%.
+                3. Identify unauthorized line items.
+                4. Risk: LOW if variance < {tolerance}% & no extra items. MEDIUM if variance 1-5%. HIGH if extra items or variance > 5%.
                 
-                TASKS:
-                1. Detect CURRENCY for both. If different, convert Invoice to PO currency.
-                2. Compare Totals. Calculate variance %.
-                3. Detect UNAUTHORIZED ITEMS (any line items on the invoice not present on the PO).
-                4. Assign RISK LEVEL: 
-                   - 'LOW (Green)' if variance <= {tolerance}% AND no unauthorized items.
-                   - 'MEDIUM (Yellow)' if variance > {tolerance}% but <= 5% AND no unauthorized items.
-                   - 'HIGH (Red)' if variance > 5% OR unauthorized items are found.
-                5. Assign ISSUE TYPE: Give a concise 1-3 word root cause category.
+                PO: {po_text}
+                INV: {inv_text}
                 
-                PURCHASE ORDER DATA:
-                {po_text}
-                
-                INVOICE DATA:
-                {inv_text}
-                
-                Output ONLY a valid JSON object with EXACTLY these keys: 
-                vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, issue_type, human_review, review_reason.
+                Output ONLY JSON: {{vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, issue_type, human_review, review_reason}}
                 """
                 
-                try:
-                    response = model.generate_content(prompt)
-                    
-                    if not response.text:
-                        st.error("AI returned an empty response. Try simplifying the PDF.")
-                        st.stop()
-                    
-                    raw_json = response.text.replace('```json', '').replace('```', '').strip()
-                    res = json.loads(raw_json)
-                    
-                    st.session_state.history.append({
-                        "Vendor": res.get("vendor"),
-                        "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
-                        "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
-                        "Variance": f"{res.get('variance_pct')}%",
-                        "Issue Type": res.get("issue_type", "Unknown"),
-                        "Risk": res.get("risk_level"),
-                        "Status": "🚨 REVIEW" if res.get("human_review") else "✅ CLEAR"
-                    })
-                    
-                    st.success(f"Audit Complete! Flagged Reason: {res.get('review_reason')}")
-                    
-                    with st.expander("🔍 View Raw System Log (JSON)"):
-                        st.json(res)
-                        
-                except Exception as e:
-                    st.error(f"Audit Error: {e}")
+                response = model.generate_content(prompt)
+                res = json.loads(response.text.replace('```json', '').replace('```', '').strip())
+                
+                # Add to History
+                st.session_state.history.append({
+                    "Vendor": res.get("vendor"),
+                    "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
+                    "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
+                    "Variance": f"{res.get('variance_pct')}%",
+                    "Issue": res.get("issue_type"),
+                    "Risk": res.get("risk_level"),
+                    "RawData": res # For the pop-up
+                })
+                
+                # Trigger the Pop-up
+                show_details(res)
 
-    # --- THE AUDIT LOG & EXPORT ---
+with tab2:
     if st.session_state.history:
-        st.write("")
-        st.subheader("📊 Enterprise Audit Trail")
+        st.markdown("### Master Audit Log")
         df = pd.DataFrame(st.session_state.history)
         
-        cols = ["Vendor", "Invoice", "PO", "Variance", "Issue Type", "Risk", "Status"]
-        df = df[[c for c in cols if c in df.columns]]
-        
-        if 'Risk' in df.columns:
-            def color_risk(val):
-                val_str = str(val).upper()
-                color = 'red' if 'HIGH' in val_str else 'orange' if 'MEDIUM' in val_str else 'green'
-                return f'color: {color}; font-weight: bold'
-            
-            st.dataframe(df.style.map(color_risk, subset=['Risk']), use_container_width=True)
-        else:
-            st.dataframe(df, use_container_width=True)
+        # Color Coding
+        def color_risk(val):
+            color = 'red' if 'HIGH' in str(val) else 'orange' if 'MEDIUM' in str(val) else 'green'
+            return f'color: {color}; font-weight: bold'
+
+        st.dataframe(df.drop(columns=['RawData']).style.map(color_risk, subset=['Risk']), use_container_width=True)
         
         csv = df.to_csv(index=False).encode('utf-8')
-        _, dl_col, _ = st.columns([1, 2, 1])
-        with dl_col:
-            st.download_button(
-                label="📥 Export Secure Audit Log (CSV)",
-                data=csv,
-                file_name="ap_audit_trail_export.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+        st.download_button("📥 Download CSV Report", csv, "audit_log.csv", "text/csv")
+    else:
+        st.info("The Audit Trail will appear here after you process documents.")
+
+with tab3:
+    st.markdown("### Vendor Risk Distribution")
+    if st.session_state.history:
+        df_viz = pd.DataFrame(st.session_state.history)
+        # Simple Bar Chart of Risks
+        risk_counts = df_viz['Risk'].value_counts()
+        st.bar_chart(risk_counts)
+        
+        st.markdown("#### Audit Notes")
+        st.write("This session has identified potential leakage in the procurement cycle. Review HIGH risk vendors immediately.")
+    else:
+        st.info("No data available for insights yet.")
