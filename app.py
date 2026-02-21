@@ -26,6 +26,7 @@ def get_clean_text(file):
 @st.dialog("Forensic 3-Way Breakdown")
 def show_details(res):
     st.markdown(f"### 🚩 Audit Result: {res.get('risk_level')}")
+    st.write(f"**Vendor:** {res.get('vendor')}")
     st.write(f"**Root Cause:** {res.get('issue_type')}")
     st.write(f"**Detailed Reasoning:** {res.get('review_reason')}")
     st.divider()
@@ -104,14 +105,13 @@ with tab1:
                     "Issue": res.get("issue_type"),
                     "Risk": res.get("risk_level"),
                     "RawData": res,
-                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    "Timestamp": datetime.now().strftime("%H:%M:%S")
                 }
                 st.session_state.history.append(audit_entry)
                 
                 if res.get("risk_level") == "LOW":
                     st.balloons()
                     st.success("✅ 3-Way Match Successful.")
-                    
                     voucher_text = f"VOUCHER APPROVED: {res.get('vendor')} | {res.get('inv_amt')} | Verified by Sahir Raza Mir, MPAc"
                     st.download_button("📥 Download Voucher", voucher_text, file_name=f"voucher_{res.get('vendor')}.txt")
                 else:
@@ -122,23 +122,27 @@ with tab1:
 with tab2:
     if st.session_state.history:
         st.markdown("### Master Audit Log")
-        st.info("💡 Pro Tip: Click a row to re-open the forensic breakdown.")
         
+        # VERSION-PROOF SELECTION METHOD
         df = pd.DataFrame(st.session_state.history)
         
-        selection = st.dataframe(
-            df.drop(columns=['RawData']), 
-            use_container_width=True, 
-            hide_index=True,
-            on_select="rerun", 
-            selection_mode="single_row"
-        )
+        # Create a display name for each audit (Vendor + Time)
+        audit_options = [f"{item['Vendor']} ({item['Timestamp']})" for item in st.session_state.history]
         
-        if len(selection.selection.rows) > 0:
-            selected_idx = selection.selection.rows[0]
-            show_details(st.session_state.history[selected_idx]["RawData"])
+        col_select, col_btn = st.columns([3, 1])
+        with col_select:
+            selected_audit_name = st.selectbox("Select an audit to review details:", options=audit_options, index=len(audit_options)-1)
+        with col_btn:
+            st.write("<br>", unsafe_allow_html=True)
+            if st.button("🔎 View Details", use_container_width=True):
+                # Find the index of the selected audit
+                idx = audit_options.index(selected_audit_name)
+                show_details(st.session_state.history[idx]["RawData"])
+
+        st.divider()
+        st.dataframe(df.drop(columns=['RawData']), use_container_width=True, hide_index=True)
     else:
-        st.info("Upload 3 documents to begin.")
+        st.info("Upload 3 documents in the Ingestion tab to begin.")
 
 with tab3:
     st.markdown("### Vendor Risk Distribution")
