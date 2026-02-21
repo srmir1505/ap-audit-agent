@@ -4,74 +4,96 @@ from PyPDF2 import PdfReader
 import pandas as pd
 import json
 
-
-if 'history' not in st.session_state:
-    st.session_state.history = []
-
-
 st.set_page_config(page_title="AP Agent Dashboard", page_icon="🏦", layout="wide")
-st.title("🏦 Sahir's AP Specialist AI")
+st.title("🏦 Sahir's Enterprise AP Auditor")
 
+# 1. INITIALIZE SESSION STATE
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-genai.configure(api_key="AIzaSyAm90SoKYJXY9-0CehsHLmIcUcVhcn7W2Q") # Replace with your ...7W2Q key
+# 2. SECURE KEY LOADING
+api_key = st.secrets["GEMINI_API_KEY"]
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-3-flash-preview')
 
-# --- SIDEBAR FOR SETTINGS ---
+# 3. SIDEBAR CONTROLS
 with st.sidebar:
     st.header("Audit Settings")
     tolerance = st.slider("Variance Tolerance (%)", 0.0, 5.0, 1.0)
-    st.info(f"Current Policy: Flag if > {tolerance}%")
+    st.info(f"Policy: Flag if variance > {tolerance}%")
+    st.divider()
+    st.write("Target: Fall 2026 Audit Ready")
 
-# --- MAIN DASHBOARD ---
+# 4. MAIN INTERFACE
 col1, col2 = st.columns(2)
 with col1:
-    po_file = st.file_uploader("1. Upload Purchase Order (PDF)", type="pdf")
+    po_file = st.file_uploader("1. Purchase Order (PDF)", type="pdf")
 with col2:
-    inv_file = st.file_uploader("2. Upload Invoice (PDF)", type="pdf")
+    inv_file = st.file_uploader("2. Invoice (PDF)", type="pdf")
 
 if po_file and inv_file:
-    if st.button("🚀 Run Full Audit"):
-        with st.spinner('Comparing documents...'):
-            # Extract text from both
+    if st.button("🚀 Run Enterprise Audit"):
+        with st.spinner('Performing Forensic Comparison...'):
             po_text = "".join([p.extract_text() for p in PdfReader(po_file).pages])
             inv_text = "".join([p.extract_text() for p in PdfReader(inv_file).pages])
             
+            # UPGRADED SYSTEM PROMPT: Now handles Multi-Currency & Risk Scoring
             prompt = f"""
-            You are a Senior AP Auditor. Compare the PURCHASE ORDER text and the INVOICE text.
-            1. Extract Vendor Name and Total Amount from the Invoice.
-            2. Compare Invoice Total vs PO Total.
-            3. Set 'human_review' to true if variance is > {tolerance}%.
+            You are a Senior Forensic Accountant. Compare the PO and Invoice.
             
-            PO TEXT: {po_text}
-            INVOICE TEXT: {inv_text}
+            TASKS:
+            1. Detect CURRENCY for both (e.g., USD, CAD, EUR). If different, convert Invoice to PO currency.
+            2. Compare Totals. Calculate variance %.
+            3. Assign RISK LEVEL: 
+               - 'LOW (Green)' if variance < {tolerance}%
+               - 'MEDIUM (Yellow)' if variance between {tolerance}% and 5%
+               - 'HIGH (Red)' if variance > 5% or unauthorized items found.
             
-            Return ONLY JSON with: vendor_name, total_amount, po_total, variance_pct, human_review, review_reason.
+            PO: {po_text}
+            INVOICE: {inv_text}
+            
+            Return JSON: vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, human_review (bool), review_reason.
             """
             
             response = model.generate_content(prompt)
             
             try:
-                raw_text = response.text.replace('```json', '').replace('```', '').strip()
-                res_json = json.loads(raw_text)
+                raw_json = response.text.replace('```json', '').replace('```', '').strip()
+                res = json.loads(raw_json)
                 
-                # Update History
+                # Logic for the Audit Log
                 st.session_state.history.append({
-                    "Vendor": res_json.get("vendor_name"),
-                    "Invoice Amt": f"${res_json.get('total_amount'):,.2f}",
-                    "PO Amt": f"${res_json.get('po_total'):,.2f}",
-                    "Variance": f"{res_json.get('variance_pct')}%",
-                    "Status": "🚨 REVIEW" if res_json.get("human_review") else "✅ MATCHED"
+                    "Vendor": res.get("vendor"),
+                    "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
+                    "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
+                    "Variance": f"{res.get('variance_pct')}%",
+                    "Risk": res.get("risk_level"),
+                    "Status": "🚨 REVIEW" if res.get("human_review") else "✅ CLEAR"
                 })
                 
                 st.success("Audit Complete!")
-                st.json(res_json)
+                st.json(res)
             except Exception as e:
-                st.error(f"Audit Failed: {e}")
+                st.error(f"Audit Error: {e}")
 
-# --- AUDIT LOG ---
+# 5. THE AUDIT LOG & EXPORT
 if st.session_state.history:
     st.divider()
     st.subheader("📊 Multi-Doc Audit Log")
-    st.table(pd.DataFrame(st.session_state.history))
+    df = pd.DataFrame(st.session_state.history)
+    
+    # Apply Visual Color Scoring to the table
+    def color_risk(val):
+        color = 'red' if 'HIGH' in val else 'orange' if 'MEDIUM' in val else 'green'
+        return f'color: {color}; font-weight: bold'
+    
+    st.table(df.style.applymap(color_risk, subset=['Risk']))
+    
+    # 6. EXPORT BUTTON
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Audit Trail (CSV)",
+        data=csv,
+        file_name="ap_audit_trail_export.csv",
+        mime="text/csv",
+    )
