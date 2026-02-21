@@ -5,32 +5,56 @@ import pandas as pd
 import json
 
 # Set wide layout and custom title
-st.set_page_config(page_title="AP Agent Dashboard", page_icon="🏦", layout="wide")
+st.set_page_config(page_title="AP Agent Dashboard", page_icon="", layout="wide")
 
-# --- 🔐 SECURE LOGIN GATEWAY ---
+# --- 🎨 SAFE LIGHTWEIGHT CSS ---
+st.markdown("""
+    <style>
+    /* Hide default Streamlit footer */
+    footer {visibility: hidden;}
+    
+    /* Apply Apple system fonts */
+    html, body, [class*="css"] {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* Clean, slightly rounded buttons */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 500;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 🔐 MODERN SECURE LOGIN GATEWAY ---
 def check_password():
-    """Returns `True` if the user had the correct password."""
     def password_entered():
         if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't keep password in memory
+            del st.session_state["password"] 
         else:
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.title("🔒 Sahir's Enterprise AP Auditor")
-        st.markdown("### Restricted Access")
-        st.text_input("Enter the secure password to continue:", type="password", on_change=password_entered, key="password")
+        st.write("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>🔒 Secure System Access</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Sahir's Enterprise AP Auditor</p>", unsafe_allow_html=True)
+        _, col, _ = st.columns([1, 1, 1])
+        with col:
+            st.text_input("Password", type="password", on_change=password_entered, key="password", placeholder="Enter your password...")
         return False
     elif not st.session_state["password_correct"]:
-        st.title("🔒 Sahir's Enterprise AP Auditor")
-        st.markdown("### Restricted Access")
-        st.text_input("Enter the secure password to continue:", type="password", on_change=password_entered, key="password")
-        st.error("Incorrect Password. Please try again.")
+        st.write("<br><br>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>🔒 Secure System Access</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Sahir's Enterprise AP Auditor</p>", unsafe_allow_html=True)
+        _, col, _ = st.columns([1, 1, 1])
+        with col:
+            st.text_input("Password", type="password", on_change=password_entered, key="password", placeholder="Enter your password...")
+            st.error("Authentication Failed. Please try again.")
         return False
     return True
 
-# --- 🚀 MAIN APPLICATION (Only runs if password is correct) ---
+# --- 🚀 MAIN APPLICATION ---
 if check_password():
     
     # 1. INITIALIZE SESSION STATE
@@ -43,33 +67,32 @@ if check_password():
     model = genai.GenerativeModel('gemini-3-flash-preview')
 
     # --- HEADER & KPI DASHBOARD ---
-    st.title("🏦 Sahir's Enterprise AP Auditor")
-    st.markdown("Automated 3-Way Matching & Forensic Risk Scoring")
+    st.markdown("<h1>Enterprise AP Auditor</h1>", unsafe_allow_html=True)
+    st.caption("Automated 3-Way Matching, Cross-Border Conversion & Forensic Risk Scoring")
+    st.write("") 
 
     total_audits = len(st.session_state.history)
     high_risk_count = sum(1 for item in st.session_state.history if "HIGH" in str(item.get("Risk", "")).upper())
 
     col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Total Documents Audited", total_audits)
+    col_m1.metric("Documents Audited", total_audits)
     col_m2.metric("High-Risk Flags", high_risk_count, delta_color="inverse")
-    col_m3.metric("System Status", "Online & Secure" if api_key else "Offline")
+    col_m3.metric("System Status", "Securely Connected" if api_key else "Offline")
     st.divider()
 
     # --- SIDEBAR CONTROLS ---
     with st.sidebar:
-        st.header("⚙️ Audit Settings")
+        st.header("⚙️ Preferences")
         tolerance = st.slider("Variance Tolerance (%)", 0.0, 5.0, 1.0)
-        st.info(f"Policy: Flag if variance > {tolerance}%")
+        st.info(f"Active Policy: Flag if > {tolerance}%")
         st.divider()
         st.write("Target: Fall 2026 Audit Ready")
-        
-        # Add a logout button inside the sidebar
-        if st.button("Log Out"):
+        st.write("")
+        if st.button("Log Out / End Session"):
             st.session_state["password_correct"] = False
             st.rerun()
 
     # --- MAIN UPLOAD INTERFACE ---
-    st.subheader("📥 Document Ingestion")
     col1, col2 = st.columns(2)
     with col1:
         po_file = st.file_uploader("1. Upload Purchase Order (PDF)", type="pdf")
@@ -78,12 +101,13 @@ if check_password():
 
     # --- EXECUTION LOGIC ---
     if po_file and inv_file:
+        st.write("")
         _, btn_col, _ = st.columns([1, 2, 1])
         with btn_col:
             run_audit = st.button("🚀 Run Forensic Audit", use_container_width=True)
 
         if run_audit:
-            with st.spinner('Performing Multi-Currency Forensic Comparison...'):
+            with st.spinner('Analyzing documents & calculating currency variances...'):
                 
                 def get_clean_text(file):
                     text = "".join([p.extract_text() for p in PdfReader(file).pages])
@@ -119,7 +143,7 @@ if check_password():
                     response = model.generate_content(prompt)
                     
                     if not response.text:
-                        st.error("AI returned an empty response.")
+                        st.error("AI returned an empty response. Try simplifying the PDF.")
                         st.stop()
                     
                     raw_json = response.text.replace('```json', '').replace('```', '').strip()
@@ -137,7 +161,7 @@ if check_password():
                     
                     st.success(f"Audit Complete! Flagged Reason: {res.get('review_reason')}")
                     
-                    with st.expander("🔍 View Raw AI Analysis Data"):
+                    with st.expander("🔍 View Raw System Log (JSON)"):
                         st.json(res)
                         
                 except Exception as e:
@@ -145,7 +169,7 @@ if check_password():
 
     # --- THE AUDIT LOG & EXPORT ---
     if st.session_state.history:
-        st.divider()
+        st.write("")
         st.subheader("📊 Enterprise Audit Trail")
         df = pd.DataFrame(st.session_state.history)
         
@@ -163,9 +187,12 @@ if check_password():
             st.dataframe(df, use_container_width=True)
         
         csv = df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Download Secure Audit Log (CSV)",
-            data=csv,
-            file_name="ap_audit_trail_export.csv",
-            mime="text/csv",
-        )
+        _, dl_col, _ = st.columns([1, 2, 1])
+        with dl_col:
+            st.download_button(
+                label="📥 Export Secure Audit Log (CSV)",
+                data=csv,
+                file_name="ap_audit_trail_export.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
