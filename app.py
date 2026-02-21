@@ -63,4 +63,58 @@ if po_file and inv_file:
             {inv_text}
             
             Output ONLY a JSON object with these keys: 
-            vendor, inv
+            vendor, inv_amt, inv_currency, po_amt, po_currency, variance_pct, risk_level, human_review, review_reason.
+            """
+            
+            # 3. CALL MODEL & PARSE JSON
+            try:
+                response = model.generate_content(prompt)
+                
+                if not response.text:
+                    st.error("AI returned an empty response. Try simplifying the PDF.")
+                    st.stop()
+                
+                # Extract and load the JSON safely
+                raw_json = response.text.replace('```json', '').replace('```', '').strip()
+                res = json.loads(raw_json)
+                
+                # Append to History Table
+                st.session_state.history.append({
+                    "Vendor": res.get("vendor"),
+                    "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
+                    "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
+                    "Variance": f"{res.get('variance_pct')}%",
+                    "Risk": res.get("risk_level"),
+                    "Status": "🚨 REVIEW" if res.get("human_review") else "✅ CLEAR"
+                })
+                
+                st.success("Audit Complete!")
+                st.json(res)
+            except Exception as e:
+                st.error(f"Audit Error: {e}")
+
+# 5. THE AUDIT LOG & EXPORT
+if st.session_state.history:
+    st.divider()
+    st.subheader("📊 Multi-Doc Audit Log")
+    df = pd.DataFrame(st.session_state.history)
+    
+    # Safety Check for the Risk column
+    if 'Risk' in df.columns:
+        def color_risk(val):
+            val_str = str(val).upper()
+            color = 'red' if 'HIGH' in val_str else 'orange' if 'MEDIUM' in val_str else 'green'
+            return f'color: {color}; font-weight: bold'
+        
+        st.table(df.style.applymap(color_risk, subset=['Risk']))
+    else:
+        st.table(df)
+    
+    # 6. EXPORT BUTTON
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Audit Trail (CSV)",
+        data=csv,
+        file_name="ap_audit_trail_export.csv",
+        mime="text/csv",
+    )
