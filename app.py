@@ -18,11 +18,11 @@ model = genai.GenerativeModel('gemini-3-flash-preview')
 
 # --- 🛠️ HELPER FUNCTIONS ---
 def get_clean_text(file):
+    if file is None: return ""
     text = "".join([p.extract_text() for p in PdfReader(file).pages])
     return text.replace('{', '[').replace('}', ']').strip()
 
-# IMPROVED DIALOG: Can now be called anytime from the table
-@st.dialog("Forensic Breakdown")
+@st.dialog("Forensic 3-Way Breakdown")
 def show_details(res):
     st.markdown(f"### 🚩 Audit Result: {res.get('risk_level')}")
     st.write(f"**Root Cause:** {res.get('issue_type')}")
@@ -33,10 +33,9 @@ def show_details(res):
         st.rerun()
 
 # --- 📱 MAIN UI ---
-st.title("🕵️ Forensic AP Auditor")
-st.caption("Advanced AI Analysis for High-Volume Accounts Payable")
+st.title("🕵️ Forensic 3-Way Matcher")
+st.caption("Verifying PO vs. Receiving Report vs. Invoice")
 
-# --- SIDEBAR: PRECISION CONTROLS ---
 with st.sidebar:
     st.header("📊 Session Intelligence")
     if st.session_state.history:
@@ -47,12 +46,10 @@ with st.sidebar:
     
     st.divider()
     st.header("⚙️ Audit Policy")
-    input_val = st.number_input("Type exact % tolerance:", min_value=0.0, max_value=10.0, value=1.0, step=0.01)
-    tolerance = st.slider("Or use slider:", 0.0, 10.0, value=input_val, step=0.1)
+    input_val = st.number_input("Tolerance %:", min_value=0.0, max_value=10.0, value=1.0, step=0.01)
+    tolerance = st.slider("Slider adj:", 0.0, 10.0, value=input_val, step=0.1)
     final_policy = input_val if input_val != 1.0 else tolerance
     
-    st.info(f"Active Policy: Flag if > {final_policy}%")
-    st.divider()
     if st.button("Clear Session"):
         st.session_state.history = []
         st.rerun()
@@ -62,45 +59,53 @@ tab1, tab2, tab3 = st.tabs(["📥 Ingestion", "📋 Audit Trail", "📈 Insights
 
 with tab1:
     st.markdown("### Step 1: Document Upload")
-    c1, c2 = st.columns(2)
+    # THE 3-WAY LAYOUT
+    c1, c2, c3 = st.columns(3)
     with c1:
-        po_file = st.file_uploader("Authorized Purchase Order", type="pdf")
+        po_file = st.file_uploader("1. Purchase Order", type="pdf")
     with c2:
-        inv_file = st.file_uploader("Incoming Vendor Invoice", type="pdf")
+        rcv_file = st.file_uploader("2. Receiving Report", type="pdf")
+    with c3:
+        inv_file = st.file_uploader("3. Vendor Invoice", type="pdf")
     
-    if po_file and inv_file:
-        st.success("Documents Loaded.")
-        if st.button("🚀 Execute Forensic Audit", use_container_width=True):
-            with st.spinner('Scanning for discrepancies...'):
+    if po_file and rcv_file and inv_file:
+        st.success("3-Way Document Set Loaded.")
+        if st.button("🚀 Execute 3-Way Match", use_container_width=True):
+            with st.spinner('Cross-referencing Order, Receipt, and Billing...'):
                 po_text = get_clean_text(po_file)
+                rcv_text = get_clean_text(rcv_file)
                 inv_text = get_clean_text(inv_file)
                 
                 prompt = f"""
-                Analyze these documents as a Forensic Accountant.
-                1. Detect Currency & Convert to PO Currency.
-                2. Check Variance. Tolerance is {final_policy}%.
-                3. Risk: LOW if variance < {final_policy}% & no extra items. 
-                   MEDIUM if variance between {final_policy}% and 5%. 
-                   HIGH if extra items or variance > 5%.
+                Analyze these 3 documents as a Forensic Auditor.
                 
-                PO: {po_text}
-                INV: {inv_text}
+                GOAL: Perform a 3-way match.
+                1. Check if Quantities on Receiving Report match Invoice.
+                2. Check if Prices on PO match Invoice.
+                3. Calculate variance % between PO Total and Invoice Total.
                 
-                Output ONLY JSON: {{"vendor": "name", "inv_amt": 0, "inv_currency": "USD", "po_amt": 0, "po_currency": "USD", "variance_pct": 0, "risk_level": "HIGH", "issue_type": "type", "human_review": true, "review_reason": "reason"}}
+                RISK RULES:
+                - LOW: Perfect match across all 3 docs within {final_policy}% tolerance.
+                - MEDIUM: Price/Quantity variance > {final_policy}% but < 5%.
+                - HIGH: Significant variance > 5%, or items BILLED that were NEVER RECEIVED.
+                
+                PO DATA: {po_text}
+                RECEIVING DATA: {rcv_text}
+                INVOICE DATA: {inv_text}
+                
+                Output ONLY JSON: {{"vendor": "name", "inv_amt": 0, "variance_pct": 0, "risk_level": "HIGH", "issue_type": "Qty Mismatch", "review_reason": "reason"}}
                 """
                 
                 response = model.generate_content(prompt)
                 res = json.loads(response.text.replace('```json', '').replace('```', '').strip())
                 
-                # STORE THE FULL RESULT DATA
                 st.session_state.history.append({
                     "Vendor": res.get("vendor"),
-                    "Invoice": f"{res.get('inv_amt')} {res.get('inv_currency')}",
-                    "PO": f"{res.get('po_amt')} {res.get('po_currency')}",
+                    "Invoice": f"{res.get('inv_amt')}",
                     "Variance": f"{res.get('variance_pct')}%",
                     "Issue": res.get("issue_type"),
                     "Risk": res.get("risk_level"),
-                    "Actions": "View Breakdown", # Button Label
+                    "Actions": "View Breakdown",
                     "RawData": res
                 })
                 show_details(res)
@@ -110,39 +115,19 @@ with tab2:
         st.markdown("### Master Audit Log")
         df = pd.DataFrame(st.session_state.history)
         
-        # INTERACTIVE DATA TABLE WITH BUTTONS
         event = st.dataframe(
             df.drop(columns=['RawData']), 
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Actions": st.column_config.ButtonColumn(
-                    "Forensic Details",
-                    help="Click to re-open the AI reasoning",
-                    width="medium",
-                    required=True,
-                )
+                "Actions": st.column_config.ButtonColumn("Forensic Details")
             },
             on_select="rerun",
             selection_mode="single_row"
         )
         
-        # LOGIC TO RE-OPEN THE POP-UP
         if event.selection.rows:
             selected_idx = event.selection.rows[0]
-            selected_data = st.session_state.history[selected_idx]["RawData"]
-            show_details(selected_data)
-
-        csv = df.drop(columns=['Actions']).to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download CSV Report", csv, "audit_log.csv", "text/csv")
+            show_details(st.session_state.history[selected_idx]["RawData"])
     else:
-        st.info("Upload documents to begin.")
-
-with tab3:
-    st.markdown("### Vendor Risk Distribution")
-    if st.session_state.history:
-        df_viz = pd.DataFrame(st.session_state.history)
-        risk_counts = df_viz['Risk'].value_counts()
-        st.bar_chart(risk_counts)
-    else:
-        st.info("No data available yet.")
+        st.info("Upload 3 documents to begin.")
